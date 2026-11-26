@@ -51,7 +51,7 @@ describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () 
 
     const rolled = rollbackSlot(fleet, 'rack-blade-01');
     assert.equal(rolled.activeSlot, 'A');
-    assert.equal(rolled.restoredRelease, 'awesome-os/desktop@v0.3.0');
+    assert.equal(rolled.restoredRelease, 'awesome-os/awesome-os@v1.0.0');
     fleet = rolled.fleet;
 
     fleet = applyPolicy(fleet, 'rack-blade-01', {
