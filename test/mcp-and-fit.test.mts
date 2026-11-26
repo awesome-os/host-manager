@@ -43,6 +43,42 @@ describe('@awesome-os/host-manager hardware-fit & stdio MCP', () => {
         storePath,
       );
       assert.equal(unknown.error?.code, -32602);
+
+      const verifyRes = handleMcpRequest(
+        {
+          jsonrpc: '2.0',
+          id: 5,
+          method: 'tools/call',
+          params: {
+            name: 'holo_verify',
+            arguments: {
+              output: 'PASS 16/16 | Authorization: Bearer secret_xyz',
+              must_contain: ['PASS 16/16'],
+              must_not_contain: ['secret_xyz'],
+            },
+          },
+        },
+        storePath,
+      );
+      const vData = (verifyRes.result as { structuredContent: { verdict: string; redacted: boolean } }).structuredContent;
+      assert.equal(vData.verdict, 'PASS');
+      assert.equal(vData.redacted, true);
+
+      const compileRes = handleMcpRequest(
+        {
+          jsonrpc: '2.0',
+          id: 6,
+          method: 'tools/call',
+          params: {
+            name: 'holo_compile',
+            arguments: { symbol_id: 'route_moe', language: 'c-zig-native', source_code: 'int f(){return 1;}', invocations: 2500 },
+          },
+        },
+        storePath,
+      );
+      const cData = (compileRes.result as { structuredContent: { tier: string; casPath: string } }).structuredContent;
+      assert.equal(cData.tier, 'tier2-native-aot');
+      assert.ok(cData.casPath.startsWith('cas/v11/files/'));
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

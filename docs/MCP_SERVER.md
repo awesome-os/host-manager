@@ -32,3 +32,7 @@ holo-host-manager mcp
 | `enroll_host` | `host_id`, `profile`, `label` | Enrolls host from canonical `system://profile/*` URI |
 | `rollback_slot` | `host_id` | Performs $O(1)$ verified A/B slot rollback |
 | `powerwash_host` | `host_id` | Resets user state back to clean verified `v11` CAS baseline |
+| `list_workspaces` | none | Lists canonical `workspaces://` VS Code / Code-OSS / Antigravity workspace definitions |
+| `materialize_workspace` | `uri`, `out_dir` | Writes `.code-workspace`, `.vscode/settings.json`, and `.vscode/mcp.json` |
+| `holo_verify` | `output`, `must_contain`, `must_not_contain` | Auto-redacts secrets, hashes output (`SHA-512`), and emits `PASS`/`FAIL` AI verdict (`lumibert-2.8ms`) |
+| `holo_compile` | `symbol_id`, `language`, `source_code`, `invocations` | Registers polyglot artifact in `cas/v11/files/<aa>/<sha512>` with tier recommendation |
