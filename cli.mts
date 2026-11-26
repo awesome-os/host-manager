@@ -20,6 +20,8 @@ import {
   SYSTEM_PROFILES,
   type UpdateChannel,
 } from './src/host-manager.mts';
+import { detectHardware, recommendProfilesAndModels } from './src/hardware-fit.mts';
+import { runStdioMcpServer } from './src/mcp-server.mts';
 
 function parseFlags(args: string[]): { positional: string[]; flags: Record<string, string | boolean> } {
   const positional: string[] = [];
@@ -63,6 +65,9 @@ Usage:
   holo-host-manager powerwash <host-id>
   holo-host-manager attach <host-id> [terminal|desktop] [--json]
   holo-host-manager drivers <host-id> [--modalias "vmbus:...,pci:..."] [--kernel "7.0.0-awesome-v11"] [--json]
+  holo-host-manager hardware [--dir <path>] [--json]
+  holo-host-manager recommend [--dir <path>] [--json]
+  holo-host-manager mcp [--store <path>]
 `);
 }
 
@@ -75,6 +80,36 @@ function main(): void {
 
   if (cmd === 'help' || cmd === '--help' || cmd === '-h' || flags.help) {
     printHelp();
+    return;
+  }
+
+  if (cmd === 'mcp') {
+    runStdioMcpServer(storePath);
+    return;
+  }
+
+  if (cmd === 'hardware') {
+    const hw = detectHardware(typeof flags.dir === 'string' ? flags.dir : undefined);
+    if (asJson) {
+      console.log(JSON.stringify(hw, null, 2));
+    } else {
+      console.log(`[HARDWARE] ${hw.summary}`);
+    }
+    return;
+  }
+
+  if (cmd === 'recommend') {
+    const hw = detectHardware(typeof flags.dir === 'string' ? flags.dir : undefined);
+    const recs = recommendProfilesAndModels(hw);
+    if (asJson) {
+      console.log(JSON.stringify({ hardware: hw, recommendations: recs }, null, 2));
+    } else {
+      console.log(`[HARDWARE] ${hw.summary}\n`);
+      for (const r of recs) {
+        const star = r.recommended ? '*' : ' ';
+        console.log(`${star} [${r.status.padEnd(10)}] ${r.id.padEnd(36)} ${r.reason}`);
+      }
+    }
     return;
   }
 
