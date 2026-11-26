@@ -7,6 +7,7 @@
   "types": "./src/host-manager.mts",
   "exports": {
     ".": "./src/host-manager.mts",
+    "./drivers": "./src/driver-manager.mts",
     "./cli": "./cli.mts"
   },
   "scripts": {

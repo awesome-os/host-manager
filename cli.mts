@@ -2,8 +2,10 @@
 import {
   applyPolicy,
   attachSurface,
+  DEFAULT_KERNEL_RELEASE,
   type DesktopAdapterId,
   enrollHost,
+  findHost,
   HostFleetStore,
   type HostLocality,
   type HostSurface,
@@ -11,6 +13,7 @@ import {
   rollbackSlot,
   type SessionMode,
   stageAndSwitchSlot,
+  syncHostDrivers,
   type UpdateChannel,
 } from './src/host-manager.mts';
 
@@ -52,6 +55,7 @@ Usage:
   holo-host-manager rollback <host-id>
   holo-host-manager powerwash <host-id>
   holo-host-manager attach <host-id> [terminal|desktop] [--json]
+  holo-host-manager drivers <host-id> [--modalias "vmbus:...,pci:..."] [--kernel "7.0.0-awesome-v11"] [--json]
 `);
 }
 
@@ -181,6 +185,48 @@ function main(): void {
       const att = attachSurface(fleet, id, surface);
       if (asJson) console.log(JSON.stringify(att, null, 2));
       else console.log(`[HOST-MANAGER] ${att.systemUri}\n  cmd: ${att.command}`);
+      return;
+    }
+
+    case 'drivers': {
+      const id = positional[1];
+      if (!id) {
+        throw new Error(
+          'Usage: holo-host-manager drivers <host-id> [--modalias "vmbus:...,pci:..."] [--kernel "7.0.0-awesome-v11"] [--json]',
+        );
+      }
+      const host = findHost(fleet, id);
+      const kernelRelease = typeof flags.kernel === 'string' ? flags.kernel : DEFAULT_KERNEL_RELEASE;
+      const rawModalias = typeof flags.modalias === 'string' ? flags.modalias : '';
+      const modaliases = rawModalias
+        ? rawModalias
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : host.drivers?.inputModaliases?.length
+          ? host.drivers.inputModaliases
+          : ['vmbus:hyperv', 'hid:b0003', 'pci:v00001AF4d00001050', 'display:webgpu', 'kvm:switch'];
+      const res = syncHostDrivers(fleet, id, kernelRelease, modaliases);
+      store.save(res.fleet);
+      if (asJson) {
+        console.log(JSON.stringify(res.pack, null, 2));
+      } else {
+        const tierKo = res.pack.drivers
+          .filter((d) => d.tier !== 'tier2-b8g-userspace')
+          .map((d) => d.id)
+          .join(', ');
+        const tierB8g = res.pack.drivers
+          .filter((d) => d.tier === 'tier2-b8g-userspace')
+          .map((d) => d.id)
+          .join(', ');
+        console.log(
+          `[HOST-MANAGER] Hydrated ${res.pack.drivers.length} v11 drivers for ${id} (kernel=${res.pack.kernelRelease})\n` +
+            `  Tier-0/1 .ko : ${tierKo || '(none)'}\n` +
+            `  Tier-2 B8G   : ${tierB8g || '(none)'}\n` +
+            `  Footprint    : ${res.pack.totalEstimatedKb} KB (${res.pack.savedMb} MB saved vs ${res.pack.traditionalDistroMb} MB /lib/modules, ${res.pack.savingsPercent}%)\n` +
+            `  v11 CAS Tag  : ${res.pack.v11VerificationTag}`,
+        );
+      }
       return;
     }
 

@@ -8,11 +8,15 @@ import {
   applyPolicy,
   attachSurface,
   createDefaultSeedFleet,
+  DEFAULT_V11_DRIVER_CATALOG,
   enrollHost,
   HostFleetStore,
+  matchModalias,
   powerwashHost,
+  resolveDriverPack,
   rollbackSlot,
   stageAndSwitchSlot,
+  syncHostDrivers,
 } from '../src/host-manager.mts';
 
 describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () => {
@@ -82,8 +86,125 @@ describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () 
       });
       const att = JSON.parse(attachOut) as { systemUri: string };
       assert.equal(att.systemUri, 'system://proxmox-01/terminal/ttyS0');
+
+      const drvOut = execFileSync(
+        process.execPath,
+        [
+          cliPath,
+          'drivers',
+          'proxmox-01',
+          '--modalias',
+          'vmbus:f912ad6d,pci:v00001AF4d00001050sv00001AF4,display:webgpu,kvm:switch',
+          '--kernel',
+          '7.0.0-awesome-v11',
+          '--store',
+          storePath,
+          '--json',
+        ],
+        { encoding: 'utf8' },
+      );
+      const drvPack = JSON.parse(drvOut) as {
+        kernelRelease: string;
+        drivers: Array<{ id: string; tier: string; v11CasTag: string }>;
+        savedMb: number;
+        v11VerificationTag: string;
+      };
+      assert.equal(drvPack.kernelRelease, '7.0.0-awesome-v11');
+      assert.ok(drvPack.drivers.some((d) => d.id === 'hyperv-keyboard'));
+      assert.ok(drvPack.drivers.some((d) => d.id === 'virtio-gpu'));
+      assert.ok(drvPack.drivers.some((d) => d.id === 'holo-display-webgpu'));
+      assert.ok(drvPack.drivers.some((d) => d.id === 'holo-device-host'));
+      assert.ok(drvPack.drivers.some((d) => d.id === 'holo-kvm-switch'));
+      assert.ok(drvPack.savedMb > 1490);
+      assert.match(drvPack.v11VerificationTag, /^v11:sha512:[0-9a-f]{32}$/);
+
+      const reloaded = store.load();
+      const proxmoxHost = reloaded.hosts.find((h) => h.id === 'proxmox-01');
+      assert.equal(proxmoxHost?.drivers?.v11VerificationTag, drvPack.v11VerificationTag);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('matches Linux depmod modalias globs (* and ?) accurately', () => {
+    assert.equal(matchModalias('vmbus:*', 'vmbus:f912ad6d-2b17-48ea-bd65-f927a61c7684'), true);
+    assert.equal(matchModalias('pci:v00001AF4d00001050*', 'pci:v00001AF4d00001050sv00001AF4sd00001100'), true);
+    assert.equal(matchModalias('pci:v00001AF4d00001050*', 'pci:v00001002d0000744C'), false);
+    assert.equal(matchModalias('hid:b000?v045E*', 'hid:b0003v045Ep0621'), true);
+    assert.equal(matchModalias('hid:b000?v045E*', 'hid:b00033v045Ep0621'), false);
+    assert.equal(matchModalias('usb:v*p*d*', 'usb:v1D6Bp0003d0600'), true);
+    assert.equal(matchModalias('serio:ty01pr00id*ex*', 'serio:ty01pr00id00ex00'), true);
+    assert.equal(matchModalias('exact-match', 'exact-match'), true);
+    assert.equal(matchModalias('exact-match', 'exact-match2'), false);
+  });
+
+  it('resolves Tier-0/1 .ko and Tier-2 B8G userspace driver packs with SHA-512 v11 CAS tags', () => {
+    assert.equal(DEFAULT_V11_DRIVER_CATALOG.length, 10);
+
+    const pack = resolveDriverPack('7.0.0-awesome-v11', [
+      'vmbus:f912ad6d',
+      'hid:b0003v045E',
+      'pci:v00001002d0000744C',
+      'pci:v000010ECd00008168',
+      'usb:v1D6Bp0003',
+      'display:webgpu',
+      'kvm:switch',
+    ]);
+
+    const ids = pack.drivers.map((d) => d.id);
+    assert.deepEqual(ids, [
+      'hyperv-keyboard',
+      'hid-hyperv',
+      'amdgpu',
+      'r8169',
+      'usbhid',
+      'holo-display-webgpu',
+      'holo-device-host',
+      'holo-kvm-switch',
+    ]);
+    assert.equal(pack.tierCounts.tier0Boot, 2);
+    assert.equal(pack.tierCounts.tier1CasKo, 3);
+    assert.equal(pack.tierCounts.tier2Userspace, 3);
+    assert.equal(pack.traditionalDistroMb, 1500);
+    assert.ok(pack.totalEstimatedKb > 0 && pack.totalEstimatedKb < 2500);
+    assert.ok(pack.savedMb > 1495);
+    assert.ok(pack.savingsPercent > 99.5);
+    assert.match(pack.packSha512, /^[0-9a-f]{128}$/);
+    assert.match(pack.v11VerificationTag, /^v11:sha512:[0-9a-f]{32}$/);
+    for (const d of pack.drivers) {
+      assert.match(d.v11CasTag, /^v11:sha512:[0-9a-f]{24}$/);
+    }
+
+    // Deterministic SHA-512 for identical inputs
+    const pack2 = resolveDriverPack('7.0.0-awesome-v11', [
+      'vmbus:f912ad6d',
+      'hid:b0003v045E',
+      'pci:v00001002d0000744C',
+      'pci:v000010ECd00008168',
+      'usb:v1D6Bp0003',
+      'display:webgpu',
+      'kvm:switch',
+    ]);
+    assert.equal(pack2.packSha512, pack.packSha512);
+  });
+
+  it('syncs resolved v11 driver inventory onto enrolled hosts via syncHostDrivers', () => {
+    const fleet = createDefaultSeedFleet('2026-11-26T00:00:00Z');
+    const res = syncHostDrivers(
+      fleet,
+      'local-workstation',
+      '7.0.0-awesome-v11',
+      ['pci:v00008086d0000A7A0', 'usb:v046DpC52B', 'display:webgpu'],
+      DEFAULT_V11_DRIVER_CATALOG,
+      '2026-11-26T01:00:00Z',
+    );
+    assert.deepEqual(
+      res.pack.drivers.map((d) => d.id),
+      ['i915', 'usbhid', 'holo-display-webgpu'],
+    );
+    const updated = res.fleet.hosts.find((h) => h.id === 'local-workstation');
+    assert.equal(updated?.drivers?.v11VerificationTag, res.pack.v11VerificationTag);
+    assert.equal(updated?.lastSeenAt, '2026-11-26T01:00:00Z');
+    assert.throws(() => syncHostDrivers(fleet, 'missing-host', '7.0.0-awesome-v11', ['usb:*']));
   });
 });

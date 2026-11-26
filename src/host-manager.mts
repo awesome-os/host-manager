@@ -1,6 +1,29 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import {
+  DEFAULT_KERNEL_RELEASE,
+  DEFAULT_V11_DRIVER_CATALOG,
+  type DriverCatalogEntry,
+  type DriverTier,
+  matchModalias,
+  type ResolvedDriverEntry,
+  type ResolvedDriverPack,
+  resolveDriverPack,
+  TRADITIONAL_DISTRO_MODULES_MB,
+} from './driver-manager.mts';
+
+export {
+  DEFAULT_KERNEL_RELEASE,
+  DEFAULT_V11_DRIVER_CATALOG,
+  type DriverCatalogEntry,
+  type DriverTier,
+  matchModalias,
+  type ResolvedDriverEntry,
+  type ResolvedDriverPack,
+  resolveDriverPack,
+  TRADITIONAL_DISTRO_MODULES_MB,
+};
 
 export type HostLocality = 'local' | 'remote';
 export type HostSurface = 'terminal' | 'desktop';
@@ -45,6 +68,7 @@ export interface ManagedHost {
     readonly B: VerifiedSlot;
   };
   readonly policy: HostPolicy;
+  readonly drivers?: ResolvedDriverPack;
   readonly powerwashCount: number;
   readonly enrolledAt: string;
   readonly lastSeenAt: string;
@@ -323,6 +347,28 @@ export function powerwashHost(
     lastSeenAt: now,
   };
   return replaceHost(fleet, updated);
+}
+
+/** Hydrate and sync a host's verified v11 CAS driver inventory from hardware modaliases */
+export function syncHostDrivers(
+  fleet: FleetState,
+  hostId: string,
+  kernelRelease: string = DEFAULT_KERNEL_RELEASE,
+  modaliases: readonly string[] = [],
+  catalog: readonly DriverCatalogEntry[] = DEFAULT_V11_DRIVER_CATALOG,
+  now: string = new Date().toISOString(),
+): { fleet: FleetState; pack: ResolvedDriverPack } {
+  const host = findHost(fleet, hostId);
+  const pack = resolveDriverPack(kernelRelease, modaliases, catalog, now);
+  const updated: ManagedHost = {
+    ...host,
+    drivers: pack,
+    lastSeenAt: now,
+  };
+  return {
+    fleet: replaceHost(fleet, updated),
+    pack,
+  };
 }
 
 /** Attach to a local or remote host's terminal or desktop surface */

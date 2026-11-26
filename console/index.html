@@ -77,6 +77,14 @@
   .chip.active-filter { border-color: var(--accent); color: var(--text); background: rgba(96,165,250,.18); }
   .chip.ok { color: #6ee7b7; border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.1); }
   .chip.slot { font-family: var(--mono); color: #93c5fd; border-color: rgba(96,165,250,.4); }
+  .chip.drv { font-family: var(--mono); color: #c4b5fd; border-color: rgba(167,139,250,.45); background: rgba(139,92,246,.14); }
+  .driver-box {
+    background: #0d1424; border: 1px dashed rgba(167,139,250,.38); border-radius: 10px;
+    padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: #ddd6fe; line-height: 1.45;
+  }
+  .driver-box .drv-meta { color: var(--muted); font-size: 10px; margin-top: 3px; }
+  button.drv-btn { background: rgba(139,92,246,.16); border-color: rgba(167,139,250,.48); color: #ddd6fe; }
+  button.drv-btn:hover { background: rgba(139,92,246,.28); border-color: #c4b5fd; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -184,6 +192,51 @@
 
 <script>
 const STORAGE_KEY = 'awesome-os.host-manager.fleet.v1';
+const TRADITIONAL_DISTRO_MB = 1500;
+const DEFAULT_KERNEL = '7.0.0-awesome-v11';
+const V11_DRIVER_CATALOG = [
+  { id: 'hyperv-keyboard', tier: 'tier0-boot', patterns: ['vmbus:*', 'serio:*'], kb: 24 },
+  { id: 'hid-hyperv', tier: 'tier1-v11-cas-ko', patterns: ['hid:*'], kb: 32 },
+  { id: 'virtio-gpu', tier: 'tier1-v11-cas-ko', patterns: ['pci:v00001AF4d00001050*'], kb: 184 },
+  { id: 'amdgpu', tier: 'tier1-v11-cas-ko', patterns: ['pci:v00001002*'], kb: 1420 },
+  { id: 'i915', tier: 'tier1-v11-cas-ko', patterns: ['pci:v00008086*'], kb: 980 },
+  { id: 'r8169', tier: 'tier1-v11-cas-ko', patterns: ['pci:v000010EC*'], kb: 112 },
+  { id: 'usbhid', tier: 'tier0-boot', patterns: ['usb:*'], kb: 68 },
+  { id: 'holo-display-webgpu', tier: 'tier2-b8g-userspace', patterns: ['display:*'], kb: 96 },
+  { id: 'holo-device-host', tier: 'tier2-b8g-userspace', patterns: ['hid:*', 'vmbus:*'], kb: 64 },
+  { id: 'holo-kvm-switch', tier: 'tier2-b8g-userspace', patterns: ['kvm:*'], kb: 48 }
+];
+
+function matchModalias(pattern, modalias) {
+  let p = 0, m = 0, star = -1, match = 0;
+  while (m < modalias.length) {
+    if (p < pattern.length && (pattern[p] === '?' || pattern[p] === modalias[m])) { p++; m++; }
+    else if (p < pattern.length && pattern[p] === '*') { star = p++; match = m; }
+    else if (star !== -1) { p = star + 1; m = ++match; }
+    else return false;
+  }
+  while (p < pattern.length && pattern[p] === '*') p++;
+  return p === pattern.length;
+}
+
+function defaultModaliasesForHost(h) {
+  if (Array.isArray(h.modaliases) && h.modaliases.length) return h.modaliases;
+  if (h.id.includes('hyperv')) return ['vmbus:f912ad6d', 'hid:b0003v045E', 'display:webgpu'];
+  if (h.id.includes('rack-blade-01')) return ['pci:v00001002d0000744C', 'pci:v000010ECd00008168', 'usb:v1D6Bp0003', 'display:webgpu', 'kvm:switch'];
+  if (h.id.includes('rack-blade-02')) return ['pci:v00001AF4d00001050', 'pci:v000010ECd00008125', 'display:webgpu', 'kvm:switch'];
+  return ['pci:v00008086d0000A7A0', 'usb:v046DpC52B', 'hid:b0003v046D', 'display:webgpu', 'kvm:switch'];
+}
+
+function resolveV11Drivers(h) {
+  const aliases = defaultModaliasesForHost(h);
+  const matched = V11_DRIVER_CATALOG.filter(d => d.patterns.some(pat => aliases.some(a => matchModalias(pat, a))));
+  const totalKb = matched.reduce((s, d) => s + d.kb, 0);
+  const savedMb = Number(Math.max(0, TRADITIONAL_DISTRO_MB - totalKb / 1024).toFixed(2));
+  const tierKo = matched.filter(d => d.tier !== 'tier2-b8g-userspace').map(d => d.id);
+  const tierB8g = matched.filter(d => d.tier === 'tier2-b8g-userspace').map(d => d.id);
+  return { kernel: DEFAULT_KERNEL, count: matched.length, totalKb, savedMb, tierKo, tierB8g, aliases };
+}
+
 const ADAPTER_URLS = {
   'sectium-desktop': '/apps/sectium.html',
   'omarchy-hyprland': '/apps/omarchy.html',
@@ -234,10 +287,10 @@ let activeFilter = 'all';
 let currentTermHost = null;
 
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts)); }
-function toast(msg) {
+function toast(msg, ms = 4200) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.style.display = 'block';
-  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 2800);
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', ms);
 }
 function sysUri(h, surface) {
   const hostSeg = h.locality === 'local' ? 'local' : h.id;
@@ -281,7 +334,13 @@ function render() {
         <span class="chip">${h.arch}</span>
         <span class="chip">${h.transport}</span>
         <span class="chip">powerwash: ${h.powerwashCount}</span>
+        <span class="chip drv" title="v11 CAS On-Demand Kernel + B8G Userspace Drivers">${h.drivers ? `v11 Drivers: ${h.drivers.count} (${h.drivers.totalKb} KB &middot; ${h.drivers.savedMb} MB saved)` : 'v11 Drivers: ready'}</span>
       </div>
+      ${h.drivers ? `<div class="driver-box">
+        <div><strong>Tier-0/1 .ko:</strong> ${h.drivers.tierKo.join(', ') || 'none'}</div>
+        <div><strong>Tier-2 B8G:</strong> ${h.drivers.tierB8g.join(', ') || 'none'}</div>
+        <div class="drv-meta">${h.drivers.kernel} &middot; ${h.drivers.totalKb} KB hydrated &middot; ${h.drivers.savedMb} MB saved vs ${TRADITIONAL_DISTRO_MB} MB /lib/modules</div>
+      </div>` : ''}
       <div class="slot-box">
         <div>
           <span class="chip slot">SLOT ${h.activeSlot} ACTIVE</span>
@@ -306,6 +365,7 @@ function render() {
       <div class="actions">
         <button class="primary" data-act="attach-desktop">Attach Desktop</button>
         <button class="good" data-act="attach-terminal">Attach Terminal</button>
+        <button class="drv-btn" data-act="hydrate-drivers">Hydrate Drivers</button>
         <button data-act="stage-update">Stage A/B Update</button>
         <button class="warn" data-act="rollback">Rollback Slot ${otherKey}</button>
         <button class="danger" data-act="powerwash">Powerwash</button>
@@ -376,6 +436,11 @@ document.getElementById('hostGrid').addEventListener('click', e => {
       `root@${h.id}:~# `;
     document.getElementById('termDrawer').classList.add('open');
     document.getElementById('termCmd').focus();
+  } else if (act === 'hydrate-drivers') {
+    const pack = resolveV11Drivers(h);
+    h.drivers = pack;
+    save(); render();
+    toast(`${h.id} v11 Drivers hydrated — .ko: [${pack.tierKo.join(', ')}] | B8G: [${pack.tierB8g.join(', ')}] (${pack.totalKb} KB, ${pack.savedMb} MB saved vs ${TRADITIONAL_DISTRO_MB} MB /lib/modules)`, 5200);
   } else if (act === 'stage-update') {
     const nextSlot = h.activeSlot === 'A' ? 'B' : 'A';
     const nextVer = `awesome-os/desktop@v0.3.${Math.floor(Math.random()*9)+1}`;
@@ -401,10 +466,15 @@ function runTermCmd() {
   const cmd = input.value.trim(); if (!cmd || !currentTermHost) return;
   const out = document.getElementById('termOut');
   let reply = '';
-  if (cmd === 'uname -a') reply = `Linux ${currentTermHost.id} 6.14.0-awesome-v11 #1 SMP ${currentTermHost.arch} GNU/Linux`;
+  if (cmd === 'uname -a') reply = `Linux ${currentTermHost.id} ${DEFAULT_KERNEL} #1 SMP ${currentTermHost.arch} GNU/Linux`;
+  else if (cmd === 'drivers') {
+    const pack = currentTermHost.drivers || resolveV11Drivers(currentTermHost);
+    currentTermHost.drivers = pack; save(); render();
+    reply = `[v11 CAS] Tier-0/1 .ko: ${pack.tierKo.join(', ')}\n[v11 CAS] Tier-2 B8G: ${pack.tierB8g.join(', ')}\n[v11 CAS] ${pack.totalKb} KB hydrated (${pack.savedMb} MB saved vs ${TRADITIONAL_DISTRO_MB} MB /lib/modules)`;
+  }
   else if (cmd.startsWith('ls')) reply = 'v11/files/  v11/links/  system.json  holo-device-host.so';
   else if (cmd === 'powerwash') { currentTermHost.powerwashCount += 1; save(); render(); reply = '[AWESOME-OS] Powerwash complete — immutable v11 CAS verified.'; }
-  else if (cmd === 'help') reply = 'Commands: uname -a | ls /var/lib/b8g/cas/v11 | powerwash | clear';
+  else if (cmd === 'help') reply = 'Commands: uname -a | drivers | ls /var/lib/b8g/cas/v11 | powerwash | clear';
   else if (cmd === 'clear') { out.textContent = `root@${currentTermHost.id}:~# `; input.value = ''; return; }
   else reply = `[exec ${currentTermHost.transport}] ok: ${cmd}`;
   out.textContent += `${cmd}\n${reply}\nroot@${currentTermHost.id}:~# `;
