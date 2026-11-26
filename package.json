@@ -1,0 +1,17 @@
+{
+  "name": "@awesome-os/host-manager",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Awesome-OS Host Manager — ChromeOS/Fuchsia/Landscape-grade Fleet & Device Control Plane",
+  "main": "./src/host-manager.mts",
+  "types": "./src/host-manager.mts",
+  "exports": {
+    ".": "./src/host-manager.mts",
+    "./cli": "./cli.mts"
+  },
+  "scripts": {
+    "test": "node --test test/host-manager.test.mts",
+    "cli": "node cli.mts"
+  },
+  "license": "BSD-3-Clause"
+}

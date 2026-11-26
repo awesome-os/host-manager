@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Awesome-OS Host Manager — ChromeOS-Grade Fleet &amp; Device Console</title>
+<style>
+  :root {
+    --bg: #0b101b;
+    --surface: #121a2b;
+    --surface-2: #182338;
+    --border: #253452;
+    --text: #e6eefc;
+    --muted: #8ea2c7;
+    --accent: #60a5fa;
+    --accent-2: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --radius: 14px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--sans); background: radial-gradient(circle at 15% 0%, #16233d 0%, var(--bg) 55%);
+    color: var(--text); min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    background: rgba(11,16,27,0.85); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .badge-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 12px var(--accent-2); }
+  h1 { font-size: 18px; margin: 0; letter-spacing: 0.2px; }
+  .sub { font-size: 12px; color: var(--muted); }
+  nav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .nav-pill {
+    text-decoration: none; color: var(--text); font-size: 12px; padding: 7px 12px;
+    border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border);
+    transition: border-color .15s, background .15s;
+  }
+  .nav-pill:hover { border-color: var(--accent); background: #1e2d48; }
+  main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 80px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat-k { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .stat-v { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; margin-bottom: 18px;
+  }
+  .filters, .enroll-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input, select {
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px; font-size: 12px; font-family: inherit;
+  }
+  button {
+    cursor: pointer; border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px;
+    font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text);
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #2563eb; border-color: #3b82f6; color: #fff; }
+  button.primary:hover { background: #1d4ed8; }
+  button.good { background: rgba(52,211,153,.14); border-color: rgba(52,211,153,.45); color: #6ee7b7; }
+  button.warn { background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.45); color: #fde68a; }
+  button.danger { background: rgba(248,113,113,.12); border-color: rgba(248,113,113,.45); color: #fca5a5; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 8px;
+    border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
+  }
+  .chip.active-filter { border-color: var(--accent); color: var(--text); background: rgba(96,165,250,.18); }
+  .chip.ok { color: #6ee7b7; border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.1); }
+  .chip.slot { font-family: var(--mono); color: #93c5fd; border-color: rgba(96,165,250,.4); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .host-id { font-family: var(--mono); font-size: 14px; font-weight: 700; color: #fff; }
+  .host-uri { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 2px; word-break: break-all; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .policy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .field label { display: block; font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .field select { width: 100%; }
+  .slot-box {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: #0e1525; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+    font-family: var(--mono); font-size: 11px;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; border-top: 1px solid rgba(37,52,82,.6); }
+  .drawer {
+    position: fixed; right: 20px; bottom: 20px; width: min(640px, calc(100vw - 40px));
+    background: #090d16; border: 1px solid var(--accent); border-radius: var(--radius);
+    box-shadow: 0 20px 60px rgba(0,0,0,.65); display: none; flex-direction: column; z-index: 50;
+  }
+  .drawer.open { display: flex; }
+  .drawer-head {
+    display: flex; justify-content: space-between; align-items: center; padding: 10px 14px;
+    border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px;
+  }
+  .term-out {
+    font-family: var(--mono); font-size: 12px; line-height: 1.45; color: #a7f3d0;
+    padding: 12px 14px; height: 220px; overflow-y: auto; white-space: pre-wrap; margin: 0;
+  }
+  .term-in { display: flex; border-top: 1px solid var(--border); }
+  .term-in input { flex: 1; border: none; border-radius: 0 0 0 var(--radius); background: #0d1322; font-family: var(--mono); }
+  .term-in button { border: none; border-radius: 0 0 var(--radius) 0; }
+  .toast {
+    position: fixed; left: 24px; bottom: 24px; background: #1e293b; border: 1px solid var(--accent-2);
+    color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 12px; display: none; z-index: 60;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="badge-dot"></span>
+    <div>
+      <h1>Awesome-OS Host Manager</h1>
+      <div class="sub">ChromeOS-Grade Fleet Control Plane &middot; Zero-Touch Enrollment &middot; A/B Verified Slots &middot; Local &amp; Remote <code>terminal</code> / <code>desktop</code></div>
+    </div>
+  </div>
+  <nav>
+    <a class="nav-pill" href="/apps/">App Catalog</a>
+    <a class="nav-pill" href="/apps/desktop.html">Desktop Greeter</a>
+    <a class="nav-pill" href="/apps/kvm.html">KVM Switch</a>
+    <a class="nav-pill" href="/apps/rack.html">19&quot; Rack</a>
+    <a class="nav-pill" href="https://github.com/awesome-os/host-manager" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="stats" id="stats"></section>
+
+  <section class="toolbar">
+    <div class="filters" id="filters">
+      <button class="chip active-filter" data-filter="all">All Hosts</button>
+      <button class="chip" data-filter="local">Local</button>
+      <button class="chip" data-filter="remote">Remote</button>
+      <button class="chip" data-filter="desktop">Desktop Surface</button>
+      <button class="chip" data-filter="terminal">Terminal Surface</button>
+    </div>
+    <div class="enroll-bar">
+      <input id="newHostId" placeholder="host-id (e.g. proxmox-03)" />
+      <select id="newLocality">
+        <option value="remote">remote</option>
+        <option value="local">local</option>
+      </select>
+      <select id="newAdapter">
+        <option value="omarchy-hyprland">Omarchy Hyprland</option>
+        <option value="sectium-desktop">Sectium Desktop</option>
+        <option value="noctalia-shell">Noctalia Shell</option>
+        <option value="chonkstep-wayland">ChonkStep Wayland</option>
+        <option value="kitty-ink-tui">Kitty-Ink Terminal</option>
+      </select>
+      <button class="primary" id="enrollBtn">+ Zero-Touch Enroll</button>
+      <button id="copyNetbootBtn" title="Copy iPXE netboot chain command">Copy Netboot</button>
+    </div>
+  </section>
+
+  <section class="grid" id="hostGrid"></section>
+</main>
+
+<div class="drawer" id="termDrawer">
+  <div class="drawer-head">
+    <span id="termTitle">system://local/terminal/ttyS0</span>
+    <button id="closeTermBtn">Close</button>
+  </div>
+  <pre class="term-out" id="termOut"></pre>
+  <div class="term-in">
+    <input id="termCmd" placeholder="uname -a | ls /var/lib/b8g/cas/v11 | powerwash | help" />
+    <button class="primary" id="termSend">Send</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'awesome-os.host-manager.fleet.v1';
+const ADAPTER_URLS = {
+  'sectium-desktop': '/apps/sectium.html',
+  'omarchy-hyprland': '/apps/omarchy.html',
+  'noctalia-shell': '/apps/noctalia.html',
+  'chonkstep-wayland': '/apps/chonkstep.html',
+  'kitty-ink-tui': '/apps/kitty-ink.html'
+};
+
+const SEED_HOSTS = [
+  {
+    id: 'local-workstation', label: 'Local Workstation (Sectium + Wayland)', locality: 'local',
+    arch: 'x86_64', transport: 'pipe', status: 'online', activeSlot: 'A',
+    slots: { A: { release: 'awesome-os/desktop@v0.3.0', verified: true }, B: { release: 'awesome-os/desktop@v0.2.0', verified: true } },
+    policy: { mode: 'managed-desktop', defaultSurface: 'desktop', desktopAdapter: 'sectium-desktop', autoUpdateChannel: 'stable', wolWarmResume: true },
+    powerwashCount: 0
+  },
+  {
+    id: 'hyperv-baremetal-01', label: 'Hyper-V Gen-2 UEFI Appliance', locality: 'local',
+    arch: 'x86_64', transport: 'pipe', status: 'online', activeSlot: 'A',
+    slots: { A: { release: 'awesome-os/desktop@v0.3.0', verified: true }, B: { release: 'awesome-os/desktop@v0.2.0', verified: true } },
+    policy: { mode: 'terminal-appliance', defaultSurface: 'terminal', desktopAdapter: 'kitty-ink-tui', autoUpdateChannel: 'stable', wolWarmResume: true },
+    powerwashCount: 0
+  },
+  {
+    id: 'rack-blade-01', label: '19" Rack Blade 01 (Omarchy Hyprland)', locality: 'remote',
+    arch: 'x86_64', transport: 'mtls-tcp', status: 'online', activeSlot: 'A',
+    slots: { A: { release: 'awesome-os/desktop@v0.3.0', verified: true }, B: { release: 'awesome-os/desktop@v0.2.0', verified: true } },
+    policy: { mode: 'managed-desktop', defaultSurface: 'desktop', desktopAdapter: 'omarchy-hyprland', autoUpdateChannel: 'beta', wolWarmResume: true },
+    powerwashCount: 0
+  },
+  {
+    id: 'rack-blade-02', label: '19" Rack Blade 02 (Noctalia Wayland)', locality: 'remote',
+    arch: 'aarch64', transport: 'mtls-tcp', status: 'online', activeSlot: 'B',
+    slots: { A: { release: 'awesome-os/desktop@v0.3.0', verified: true }, B: { release: 'awesome-os/desktop@v0.3.1-rc1', verified: true } },
+    policy: { mode: 'kiosk-app', defaultSurface: 'desktop', desktopAdapter: 'noctalia-shell', autoUpdateChannel: 'canary', wolWarmResume: true },
+    powerwashCount: 0
+  }
+];
+
+let hosts = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch {}
+  return structuredClone(SEED_HOSTS);
+})();
+let activeFilter = 'all';
+let currentTermHost = null;
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts)); }
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 2800);
+}
+function sysUri(h, surface) {
+  const hostSeg = h.locality === 'local' ? 'local' : h.id;
+  const target = surface === 'terminal' ? 'ttyS0' : h.policy.desktopAdapter;
+  return `system://${hostSeg}/${surface}/${target}`;
+}
+
+function render() {
+  const localN = hosts.filter(h => h.locality === 'local').length;
+  const remoteN = hosts.filter(h => h.locality === 'remote').length;
+  const verifiedN = hosts.filter(h => h.slots[h.activeSlot].verified).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-k">Enrolled Hosts</div><div class="stat-v">${hosts.length}</div></div>
+    <div class="stat"><div class="stat-k">Local / Remote</div><div class="stat-v">${localN} / ${remoteN}</div></div>
+    <div class="stat"><div class="stat-k">Verified A/B Slots</div><div class="stat-v" style="color:var(--accent-2)">${verifiedN}/${hosts.length}</div></div>
+    <div class="stat"><div class="stat-k">CAS &amp; ABI</div><div class="stat-v" style="font-size:18px;font-family:var(--mono)">v11 &middot; 0x33564742</div></div>
+  `;
+
+  const filtered = hosts.filter(h => {
+    if (activeFilter === 'local' || activeFilter === 'remote') return h.locality === activeFilter;
+    if (activeFilter === 'desktop' || activeFilter === 'terminal') return h.policy.defaultSurface === activeFilter;
+    return true;
+  });
+
+  document.getElementById('hostGrid').innerHTML = filtered.map(h => {
+    const cur = h.slots[h.activeSlot];
+    const otherKey = h.activeSlot === 'A' ? 'B' : 'A';
+    const other = h.slots[otherKey];
+    return `
+    <article class="card" data-id="${h.id}">
+      <div class="card-head">
+        <div>
+          <div class="host-id">${h.id}</div>
+          <div class="sub">${h.label}</div>
+          <div class="host-uri">${sysUri(h, h.policy.defaultSurface)}</div>
+        </div>
+        <span class="chip ok">${h.status}</span>
+      </div>
+      <div class="row">
+        <span class="chip">${h.locality}</span>
+        <span class="chip">${h.arch}</span>
+        <span class="chip">${h.transport}</span>
+        <span class="chip">powerwash: ${h.powerwashCount}</span>
+      </div>
+      <div class="slot-box">
+        <div>
+          <span class="chip slot">SLOT ${h.activeSlot} ACTIVE</span>
+          <span style="margin-left:6px">${cur.release}</span>
+        </div>
+        <div style="color:var(--muted)">Prev ${otherKey}: ${other.release.split('@')[1] || other.release}</div>
+      </div>
+      <div class="policy-grid">
+        <div class="field">
+          <label>Session Mode (ChromeOS Policy)</label>
+          <select data-act="mode">
+            ${['managed-desktop','kiosk-app','terminal-appliance','ephemeral-guest'].map(m => `<option value="${m}" ${h.policy.mode===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Desktop UI Adapter</label>
+          <select data-act="adapter">
+            ${Object.keys(ADAPTER_URLS).map(a => `<option value="${a}" ${h.policy.desktopAdapter===a?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" data-act="attach-desktop">Attach Desktop</button>
+        <button class="good" data-act="attach-terminal">Attach Terminal</button>
+        <button data-act="stage-update">Stage A/B Update</button>
+        <button class="warn" data-act="rollback">Rollback Slot ${otherKey}</button>
+        <button class="danger" data-act="powerwash">Powerwash</button>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('[data-filter]');
+  if (!btn) return;
+  activeFilter = btn.dataset.filter;
+  document.querySelectorAll('#filters .chip').forEach(c => c.classList.toggle('active-filter', c === btn));
+  render();
+});
+
+document.getElementById('enrollBtn').addEventListener('click', () => {
+  const id = (document.getElementById('newHostId').value || '').trim();
+  if (!id) { toast('Enter a host-id first (e.g. proxmox-03)'); return; }
+  const locality = document.getElementById('newLocality').value;
+  const adapter = document.getElementById('newAdapter').value;
+  const surface = adapter === 'kitty-ink-tui' ? 'terminal' : 'desktop';
+  hosts = hosts.filter(h => h.id !== id);
+  hosts.unshift({
+    id, label: `${locality === 'local' ? 'Local' : 'Remote'} Host (${adapter})`, locality,
+    arch: 'x86_64', transport: locality === 'local' ? 'pipe' : 'mtls-tcp', status: 'online', activeSlot: 'A',
+    slots: { A: { release: 'awesome-os/desktop@v0.3.0', verified: true }, B: { release: 'awesome-os/desktop@v0.3.0', verified: true } },
+    policy: { mode: surface === 'terminal' ? 'terminal-appliance' : 'managed-desktop', defaultSurface: surface, desktopAdapter: adapter, autoUpdateChannel: 'stable', wolWarmResume: true },
+    powerwashCount: 0
+  });
+  document.getElementById('newHostId').value = '';
+  save(); render(); toast(`Enrolled ${id} (${locality}/${surface})`);
+});
+
+document.getElementById('copyNetbootBtn').addEventListener('click', async () => {
+  const cmd = 'chain https://awesome-os.com/netboot/boot.ipxe';
+  try { await navigator.clipboard.writeText(cmd); } catch {}
+  toast(`Copied iPXE netboot: ${cmd}`);
+});
+
+document.getElementById('hostGrid').addEventListener('change', e => {
+  const card = e.target.closest('.card'); if (!card) return;
+  const h = hosts.find(x => x.id === card.dataset.id); if (!h) return;
+  if (e.target.dataset.act === 'mode') { h.policy.mode = e.target.value; save(); toast(`${h.id} policy -> ${h.policy.mode}`); }
+  if (e.target.dataset.act === 'adapter') {
+    h.policy.desktopAdapter = e.target.value;
+    h.policy.defaultSurface = e.target.value === 'kitty-ink-tui' ? 'terminal' : 'desktop';
+    save(); render(); toast(`${h.id} UI adapter -> ${h.policy.desktopAdapter}`);
+  }
+});
+
+document.getElementById('hostGrid').addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]'); if (!btn) return;
+  const card = btn.closest('.card');
+  const h = hosts.find(x => x.id === card.dataset.id); if (!h) return;
+  const act = btn.dataset.act;
+  if (act === 'attach-desktop') {
+    const url = ADAPTER_URLS[h.policy.desktopAdapter] || '/apps/desktop.html';
+    window.open(url, '_blank', 'noopener');
+    toast(`Attached desktop -> ${sysUri(h, 'desktop')}`);
+  } else if (act === 'attach-terminal') {
+    currentTermHost = h;
+    document.getElementById('termTitle').textContent = `${sysUri(h, 'terminal')} (${h.transport})`;
+    document.getElementById('termOut').textContent =
+      `[AWESOME-OS] Connected to ${h.id} (${h.locality}/${h.arch})\n` +
+      `[AWESOME-OS] Active Slot ${h.activeSlot}: ${h.slots[h.activeSlot].release} (VERIFIED)\n` +
+      `[AWESOME-OS] v11 CAS: /var/lib/b8g/cas/v11/files/ (ABI 0x33564742)\n` +
+      `root@${h.id}:~# `;
+    document.getElementById('termDrawer').classList.add('open');
+    document.getElementById('termCmd').focus();
+  } else if (act === 'stage-update') {
+    const nextSlot = h.activeSlot === 'A' ? 'B' : 'A';
+    const nextVer = `awesome-os/desktop@v0.3.${Math.floor(Math.random()*9)+1}`;
+    h.slots[nextSlot] = { release: nextVer, verified: true };
+    h.activeSlot = nextSlot;
+    save(); render(); toast(`${h.id} staged & switched -> Slot ${nextSlot} (${nextVer})`);
+  } else if (act === 'rollback') {
+    const prevSlot = h.activeSlot === 'A' ? 'B' : 'A';
+    h.activeSlot = prevSlot;
+    save(); render(); toast(`${h.id} rolled back -> Slot ${prevSlot} (${h.slots[prevSlot].release})`);
+  } else if (act === 'powerwash') {
+    h.powerwashCount += 1;
+    h.policy.mode = 'managed-desktop';
+    save(); render(); toast(`${h.id} Powerwashed (ephemeral state wiped, immutable v11 CAS intact)`);
+  }
+});
+
+document.getElementById('closeTermBtn').addEventListener('click', () => {
+  document.getElementById('termDrawer').classList.remove('open');
+});
+function runTermCmd() {
+  const input = document.getElementById('termCmd');
+  const cmd = input.value.trim(); if (!cmd || !currentTermHost) return;
+  const out = document.getElementById('termOut');
+  let reply = '';
+  if (cmd === 'uname -a') reply = `Linux ${currentTermHost.id} 6.14.0-awesome-v11 #1 SMP ${currentTermHost.arch} GNU/Linux`;
+  else if (cmd.startsWith('ls')) reply = 'v11/files/  v11/links/  system.json  holo-device-host.so';
+  else if (cmd === 'powerwash') { currentTermHost.powerwashCount += 1; save(); render(); reply = '[AWESOME-OS] Powerwash complete — immutable v11 CAS verified.'; }
+  else if (cmd === 'help') reply = 'Commands: uname -a | ls /var/lib/b8g/cas/v11 | powerwash | clear';
+  else if (cmd === 'clear') { out.textContent = `root@${currentTermHost.id}:~# `; input.value = ''; return; }
+  else reply = `[exec ${currentTermHost.transport}] ok: ${cmd}`;
+  out.textContent += `${cmd}\n${reply}\nroot@${currentTermHost.id}:~# `;
+  out.scrollTop = out.scrollHeight;
+  input.value = '';
+}
+document.getElementById('termSend').addEventListener('click', runTermCmd);
+document.getElementById('termCmd').addEventListener('keydown', e => { if (e.key === 'Enter') runTermCmd(); });
+
+render();
+</script>
+</body>
+</html>
