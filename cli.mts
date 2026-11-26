@@ -2,8 +2,10 @@
 import {
   applyPolicy,
   attachSurface,
+  AUDITABLE_DRIVER_SETS,
   DEFAULT_KERNEL_RELEASE,
   type DesktopAdapterId,
+  enrollFromProfile,
   enrollHost,
   findHost,
   HostFleetStore,
@@ -13,7 +15,9 @@ import {
   rollbackSlot,
   type SessionMode,
   stageAndSwitchSlot,
+  switchHostDriverSet,
   syncHostDrivers,
+  SYSTEM_PROFILES,
   type UpdateChannel,
 } from './src/host-manager.mts';
 
@@ -49,7 +53,10 @@ function printHelp(): void {
 Usage:
   holo-host-manager list [--json]
   holo-host-manager status [--json]
-  holo-host-manager enroll <host-id> [--label "..."] [--locality local|remote] [--surface desktop|terminal] [--adapter <id>] [--mode <mode>]
+  holo-host-manager enroll <host-id> [--profile system://profile/<name>] [--label "..."] [--locality local|remote] [--surface desktop|terminal] [--adapter <id>] [--mode <mode>]
+  holo-host-manager profiles [--json]
+  holo-host-manager driver-sets [--json]
+  holo-host-manager driver-set <host-id> <system://driver-set/name@track> [--json]
   holo-host-manager policy <host-id> [--adapter <id>] [--mode <mode>] [--channel stable|beta|canary|pinned] [--surface desktop|terminal]
   holo-host-manager update <host-id> --release <tag> [--hash <sha512>]
   holo-host-manager rollback <host-id>
@@ -111,9 +118,51 @@ function main(): void {
       return;
     }
 
+    case 'profiles': {
+      if (asJson) {
+        console.log(JSON.stringify(SYSTEM_PROFILES, null, 2));
+      } else {
+        for (const p of SYSTEM_PROFILES) {
+          console.log(`${p.uri.padEnd(42)}  ${p.osRepo.padEnd(18)}  ${p.surface}/${p.desktopAdapter}`);
+        }
+      }
+      return;
+    }
+
+    case 'driver-sets': {
+      if (asJson) {
+        console.log(JSON.stringify(AUDITABLE_DRIVER_SETS, null, 2));
+      } else {
+        for (const d of AUDITABLE_DRIVER_SETS) {
+          console.log(`${d.uri.padEnd(46)}  [${d.track.padEnd(11)}]  ${d.kernelRange.padEnd(12)}  sha512:${d.sha512.slice(0, 12)}`);
+        }
+      }
+      return;
+    }
+
+    case 'driver-set': {
+      const id = positional[1];
+      const uri = positional[2];
+      if (!id || !uri) throw new Error('Usage: holo-host-manager driver-set <host-id> <system://driver-set/name@track>');
+      const res = switchHostDriverSet(fleet, id, uri);
+      store.save(res.fleet);
+      if (asJson) console.log(JSON.stringify({ hostId: id, activeSlot: res.targetSlot, driverSet: res.driverSet }, null, 2));
+      else console.log(`[HOST-MANAGER] Switched ${id} -> Slot ${res.targetSlot} (${res.driverSet.uri} | track=${res.driverSet.track} | audited=${res.driverSet.auditedBy} | rollbackSafe=true)`);
+      return;
+    }
+
     case 'enroll': {
       const id = positional[1];
       if (!id) throw new Error('Usage: holo-host-manager enroll <host-id>');
+      if (typeof flags.profile === 'string') {
+        const res = enrollFromProfile(fleet, id, flags.profile);
+        fleet = res.fleet;
+        store.save(fleet);
+        const enrolled = fleet.hosts.find((h) => h.id === id);
+        if (asJson) console.log(JSON.stringify(enrolled, null, 2));
+        else console.log(`[HOST-MANAGER] Enrolled ${id} from ${res.profile.uri} (${res.profile.osRepo} -> ${res.profile.desktopAdapter})`);
+        return;
+      }
       fleet = enrollHost(fleet, {
         id,
         label: typeof flags.label === 'string' ? flags.label : undefined,

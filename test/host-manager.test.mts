@@ -7,8 +7,10 @@ import { describe, it } from 'node:test';
 import {
   applyPolicy,
   attachSurface,
+  AUDITABLE_DRIVER_SETS,
   createDefaultSeedFleet,
   DEFAULT_V11_DRIVER_CATALOG,
+  enrollFromProfile,
   enrollHost,
   HostFleetStore,
   matchModalias,
@@ -16,7 +18,9 @@ import {
   resolveDriverPack,
   rollbackSlot,
   stageAndSwitchSlot,
+  switchHostDriverSet,
   syncHostDrivers,
+  SYSTEM_PROFILES,
 } from '../src/host-manager.mts';
 
 describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () => {
@@ -206,5 +210,29 @@ describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () 
     assert.equal(updated?.drivers?.v11VerificationTag, res.pack.v11VerificationTag);
     assert.equal(updated?.lastSeenAt, '2026-11-26T01:00:00Z');
     assert.throws(() => syncHostDrivers(fleet, 'missing-host', '7.0.0-awesome-v11', ['usb:*']));
+  });
+
+  it('enrolls hosts from system://profile/* presets and switches auditable system://driver-set/* tracks with A/B rollback', () => {
+    assert.ok(SYSTEM_PROFILES.length >= 6);
+    assert.ok(AUDITABLE_DRIVER_SETS.length >= 6);
+
+    let fleet = createDefaultSeedFleet();
+    const enrolled = enrollFromProfile(fleet, 'dev-laptop-01', 'system://profile/workstation-omarchy');
+    assert.equal(enrolled.profile.desktopAdapter, 'omarchy-hyprland');
+    fleet = enrolled.fleet;
+
+    const switchedProp = switchHostDriverSet(fleet, 'dev-laptop-01', 'system://driver-set/gpu-nvidia@proprietary');
+    assert.equal(switchedProp.driverSet.track, 'proprietary');
+    assert.equal(switchedProp.targetSlot, 'B');
+    fleet = switchedProp.fleet;
+
+    const switchedDev = switchHostDriverSet(fleet, 'dev-laptop-01', 'system://driver-set/gpu-nvidia@driver-dev');
+    assert.equal(switchedDev.driverSet.track, 'driver-dev');
+    assert.equal(switchedDev.targetSlot, 'A');
+    fleet = switchedDev.fleet;
+
+    const rolled = rollbackSlot(fleet, 'dev-laptop-01');
+    assert.equal(rolled.activeSlot, 'B');
+    assert.equal(rolled.restoredRelease, 'system://driver-set/gpu-nvidia@proprietary');
   });
 });

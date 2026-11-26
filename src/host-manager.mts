@@ -12,16 +12,32 @@ import {
   resolveDriverPack,
   TRADITIONAL_DISTRO_MODULES_MB,
 } from './driver-manager.mts';
+import {
+  AUDITABLE_DRIVER_SETS,
+  type AuditableDriverSet,
+  type DriverTrack,
+  resolveDriverSet,
+  resolveSystemProfile,
+  SYSTEM_PROFILES,
+  type SystemProfile,
+} from './profiles-and-driver-sets.mts';
 
 export {
+  AUDITABLE_DRIVER_SETS,
+  type AuditableDriverSet,
   DEFAULT_KERNEL_RELEASE,
   DEFAULT_V11_DRIVER_CATALOG,
   type DriverCatalogEntry,
   type DriverTier,
+  type DriverTrack,
   matchModalias,
   type ResolvedDriverEntry,
   type ResolvedDriverPack,
   resolveDriverPack,
+  resolveDriverSet,
+  resolveSystemProfile,
+  SYSTEM_PROFILES,
+  type SystemProfile,
   TRADITIONAL_DISTRO_MODULES_MB,
 };
 
@@ -395,6 +411,56 @@ export function attachSurface(
     transport: host.transport,
     command,
   };
+}
+
+/** Safely switch a host to an auditable system://driver-set/* track via A/B Slot staging (instant rollback on probe failure) */
+export function switchHostDriverSet(
+  fleet: FleetState,
+  hostId: string,
+  driverSetUri: string,
+  now: string = new Date().toISOString(),
+): { fleet: FleetState; driverSet: AuditableDriverSet; targetSlot: SlotId } {
+  const driverSet = resolveDriverSet(driverSetUri);
+  const staged = stageAndSwitchSlot(
+    fleet,
+    hostId,
+    `${driverSet.uri}`,
+    `v11:sha512:${driverSet.sha512}`,
+    now,
+  );
+  return { fleet: staged.fleet, driverSet, targetSlot: staged.targetSlot };
+}
+
+/** Enroll a host directly from a reusable system://profile/* preset */
+export function enrollFromProfile(
+  fleet: FleetState,
+  hostId: string,
+  profileUriOrId: string,
+  now: string = new Date().toISOString(),
+): { fleet: FleetState; profile: SystemProfile } {
+  const profile = resolveSystemProfile(profileUriOrId);
+  let next = enrollHost(
+    fleet,
+    {
+      id: hostId,
+      label: `${profile.name} (${hostId})`,
+      locality: profile.locality,
+      surface: profile.surface,
+      desktopAdapter: profile.desktopAdapter,
+      mode: profile.mode,
+    },
+    now,
+  );
+  const synced = syncHostDrivers(
+    next,
+    hostId,
+    DEFAULT_KERNEL_RELEASE,
+    profile.defaultModaliases,
+    DEFAULT_V11_DRIVER_CATALOG,
+    now,
+  );
+  next = synced.fleet;
+  return { fleet: next, profile };
 }
 
 export function getDefaultFleetStorePath(): string {
