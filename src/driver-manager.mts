@@ -100,6 +100,22 @@ export const DEFAULT_V11_DRIVER_CATALOG: readonly DriverCatalogEntry[] = [
     estimatedKb: 68,
     description: 'USB Human Interface Device early-boot input driver',
   },
+  {
+    id: 'apple-avd-video',
+    moduleName: 'apple-avd.ko',
+    tier: 'tier1-v11-cas-ko',
+    modaliases: ['of:N*T*Capple,avd*', 'acpi:APPL*'],
+    estimatedKb: 196,
+    description: 'Generic Apple Silicon M1/M2 hardware H.264/HEVC/VP9 video decode driver (v11 CAS)',
+  },
+  {
+    id: 'apple-ane-drm',
+    moduleName: 'apple-ane.ko',
+    tier: 'tier1-v11-cas-ko',
+    modaliases: ['of:N*T*Capple,ane*', 'acpi:APPL*'],
+    estimatedKb: 148,
+    description: 'Generic Apple Silicon M1/M2 Neural Engine DRM accelerator driver (v11 CAS)',
+  },
   // Tier 2: User-space B8G_ABI_MAGIC_V3 micro-drivers
   {
     id: 'holo-display-webgpu',

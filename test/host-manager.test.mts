@@ -143,7 +143,7 @@ describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () 
   });
 
   it('resolves Tier-0/1 .ko and Tier-2 B8G userspace driver packs with SHA-512 v11 CAS tags', () => {
-    assert.equal(DEFAULT_V11_DRIVER_CATALOG.length, 10);
+    assert.equal(DEFAULT_V11_DRIVER_CATALOG.length, 12);
 
     const pack = resolveDriverPack('7.0.0-awesome-v11', [
       'vmbus:f912ad6d',
@@ -227,7 +227,13 @@ describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () 
     const kde = enrollFromProfile(gnome.fleet, 'kde-box-01', 'system://profile/workstation-kde');
     assert.equal(kde.profile.desktopAdapter, 'kde-plasma');
     assert.ok(kde.profile.exclude?.includes('baloo'));
-    fleet = kde.fleet;
+
+    const m1 = enrollFromProfile(kde.fleet, 'macbook-m1', 'system://profile/workstation-omarchy-m1');
+    assert.equal(m1.profile.defaultDriverSetUri, 'system://driver-set/apple-silicon@pinned-v1');
+    const m1Host = m1.fleet.hosts.find((h) => h.id === 'macbook-m1');
+    assert.ok(m1Host?.drivers?.drivers.some((d) => d.id === 'apple-avd-video'));
+    assert.ok(m1Host?.drivers?.drivers.some((d) => d.id === 'apple-ane-drm'));
+    fleet = m1.fleet;
 
     const switchedProp = switchHostDriverSet(fleet, 'dev-laptop-01', 'system://driver-set/gpu-nvidia@proprietary');
     assert.equal(switchedProp.driverSet.track, 'proprietary');
