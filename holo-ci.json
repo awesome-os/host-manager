@@ -1,0 +1,16 @@
+{
+  "schema": "holo-ci.v1",
+  "name": "host-manager",
+  "kind": "control-plane",
+  "tests": [
+    "node --test test/host-manager.test.mts test/ab-installer.test.mts test/mcp-and-fit.test.mts test/workspaces.test.mts",
+    "node -e \"const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('channels/stable.json','utf8')); if(!c.artifacts||c.artifacts.length===0) process.exit(1)\""
+  ],
+  "docs": [
+    "README.md"
+  ],
+  "guards": {
+    "zeroGhost": true,
+    "zeroCasV1": true
+  }
+}
