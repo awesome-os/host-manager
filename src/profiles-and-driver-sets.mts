@@ -165,6 +165,48 @@ export const SYSTEM_PROFILES: readonly SystemProfile[] = [
     defaultModaliases: ['pci:v000010DEd00002684', 'display:webgpu', 'hid:b0003'],
   },
   {
+    uri: 'system://profile/workstation-chonkstep',
+    id: 'workstation-chonkstep',
+    name: 'Workstation — ChonkStep Wayland (BeOS / Smithay)',
+    osRepo: 'awesome-os/desktop',
+    locality: 'local',
+    surface: 'desktop',
+    desktopAdapter: 'chonkstep-wayland',
+    mode: 'managed-desktop',
+    defaultDriverSetUri: 'system://driver-set/gpu-amd@open-foss',
+    defaultModaliases: ['pci:v00001002d0000744C', 'usb:v046DpC52B', 'display:webgpu'],
+  },
+  {
+    uri: 'system://profile/workstation-hyperv',
+    id: 'workstation-hyperv',
+    name: 'Workstation — Hyper-V Gen-2 UEFI',
+    osRepo: 'awesome-os/desktop',
+    locality: 'local',
+    surface: 'desktop',
+    desktopAdapter: 'omarchy-hyprland',
+    mode: 'managed-desktop',
+    defaultDriverSetUri: 'system://driver-set/hyperv-uefi@pinned-v1',
+    defaultModaliases: ['vmbus:hyperv', 'hid:b0003', 'serio:ty01', 'display:webgpu'],
+  },
+  {
+    uri: 'system://profile/baseline-t2sde',
+    id: 'baseline-t2sde',
+    name: 'Baseline — T2 SDE Real-Compiler + Base Holo Stack',
+    osRepo: 'awesome-os/posix',
+    locality: 'local',
+    surface: 'terminal',
+    desktopAdapter: 'kitty-ink-tui',
+    mode: 'terminal-appliance',
+    defaultDriverSetUri: 'system://driver-set/hyperv-uefi@pinned-v1',
+    defaultModaliases: ['vmbus:hyperv', 'pci:v000010ECd00008168'],
+    exclude: ['sysvinit', 'systemd', 'xorg-server', 'texinfo', 'groff', 'gettext', 'man-db', 'linux-firmware'],
+    remap: {
+      'gnu-coreutils': 'awesome-os/coreutils',
+      sysvinit: 'awesome-os/posix',
+      'xorg-server': 'awesome-os/desktop',
+    },
+  },
+  {
     uri: 'system://profile/server-rack-blade',
     id: 'server-rack-blade',
     name: '19" Server Rack Blade (Awesome-OS POSIX)',
@@ -240,7 +282,8 @@ export const SYSTEM_PROFILES: readonly SystemProfile[] = [
 
 export function resolveSystemProfile(uriOrId: string): SystemProfile {
   const key = uriOrId.trim();
-  const match = SYSTEM_PROFILES.find((p) => p.uri === key || p.id === key);
+  const alias = key === 'hyperv-uefi-dev' || key === 'system://profile/hyperv-uefi-dev' ? 'workstation-hyperv' : key;
+  const match = SYSTEM_PROFILES.find((p) => p.uri === alias || p.id === alias);
   if (!match) {
     const valid = SYSTEM_PROFILES.map((p) => p.uri).join(', ');
     throw new Error(`Unknown system profile "${uriOrId}". Available: ${valid}`);
