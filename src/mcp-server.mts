@@ -12,6 +12,7 @@ import {
   powerwashHost,
   rollbackSlot,
 } from './host-manager.mts';
+import { AWESOME_WORKSPACES, materializeWorkspace } from './workspaces.mts';
 
 export interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -83,6 +84,20 @@ export const MCP_TOOLS = [
       type: 'object',
       required: ['host_id'],
       properties: { host_id: { type: 'string' } },
+    },
+  },
+  {
+    name: 'list_workspaces',
+    description: 'List canonical workspaces:// VS Code / Code-OSS / Antigravity workspace definitions.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'materialize_workspace',
+    description: 'Write .code-workspace, .vscode/settings.json, and .vscode/mcp.json for a workspaces:// URI.',
+    inputSchema: {
+      type: 'object',
+      required: ['uri', 'out_dir'],
+      properties: { uri: { type: 'string' }, out_dir: { type: 'string' } },
     },
   },
 ] as const;
@@ -182,6 +197,15 @@ export function handleMcpRequest(req: JsonRpcRequest, storePath?: string): JsonR
           const host = powerwashHost(fleet, hostId);
           store.save(fleet);
           return { jsonrpc: '2.0', id, result: toolOk(host) };
+        }
+        case 'list_workspaces': {
+          return { jsonrpc: '2.0', id, result: toolOk(AWESOME_WORKSPACES) };
+        }
+        case 'materialize_workspace': {
+          const uri = String(args.uri ?? '').trim();
+          const outDir = String(args.out_dir ?? '').trim();
+          if (!uri || !outDir) return { jsonrpc: '2.0', id, result: toolErr('uri and out_dir are required') };
+          return { jsonrpc: '2.0', id, result: toolOk(materializeWorkspace(uri, outDir)) };
         }
         default:
           return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${name}` } };

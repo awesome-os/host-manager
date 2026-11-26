@@ -22,6 +22,7 @@ import {
 } from './src/host-manager.mts';
 import { detectHardware, recommendProfilesAndModels } from './src/hardware-fit.mts';
 import { runStdioMcpServer } from './src/mcp-server.mts';
+import { AWESOME_WORKSPACES, materializeWorkspace } from './src/workspaces.mts';
 
 function parseFlags(args: string[]): { positional: string[]; flags: Record<string, string | boolean> } {
   const positional: string[] = [];
@@ -67,6 +68,8 @@ Usage:
   holo-host-manager drivers <host-id> [--modalias "vmbus:...,pci:..."] [--kernel "7.0.0-awesome-v11"] [--json]
   holo-host-manager hardware [--dir <path>] [--json]
   holo-host-manager recommend [--dir <path>] [--json]
+  holo-host-manager workspaces [--json]
+  holo-host-manager workspace <workspaces://org/name> [--out <dir>] [--json]
   holo-host-manager mcp [--store <path>]
 `);
 }
@@ -94,6 +97,29 @@ function main(): void {
       console.log(JSON.stringify(hw, null, 2));
     } else {
       console.log(`[HARDWARE] ${hw.summary}`);
+    }
+    return;
+  }
+
+  if (cmd === 'workspaces') {
+    if (asJson) {
+      console.log(JSON.stringify(AWESOME_WORKSPACES, null, 2));
+    } else {
+      for (const w of AWESOME_WORKSPACES) {
+        console.log(`${w.uri.padEnd(36)} ${w.displayName}`);
+      }
+    }
+    return;
+  }
+
+  if (cmd === 'workspace') {
+    const uri = positional[1] ?? 'workspaces://awesome-os/ai-colibri';
+    const outDir = typeof flags.out === 'string' ? flags.out : process.cwd();
+    const res = materializeWorkspace(uri, outDir);
+    if (asJson) {
+      console.log(JSON.stringify(res, null, 2));
+    } else {
+      console.log(`[WORKSPACE] Materialized ${uri} -> ${res.workspaceFile}`);
     }
     return;
   }
