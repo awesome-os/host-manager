@@ -29,6 +29,8 @@ export interface SystemProfile {
   readonly mode: SessionMode;
   readonly defaultDriverSetUri: string;
   readonly defaultModaliases: readonly string[];
+  readonly exclude?: readonly string[];
+  readonly remap?: Readonly<Record<string, string>>;
 }
 
 function auditHash(uri: string, modules: readonly string[], kernelRange: string): string {
@@ -185,6 +187,42 @@ export const SYSTEM_PROFILES: readonly SystemProfile[] = [
     mode: 'managed-desktop',
     defaultDriverSetUri: 'system://driver-set/hyperv-uefi@pinned-v1',
     defaultModaliases: ['vmbus:hyperv', 'hid:b0003', 'serio:ty01', 'display:webgpu'],
+  },
+  {
+    uri: 'system://profile/workstation-gnome',
+    id: 'workstation-gnome',
+    name: 'Workstation — GNOME Wayland (Debloated)',
+    osRepo: 'awesome-os/desktop',
+    locality: 'local',
+    surface: 'desktop',
+    desktopAdapter: 'gnome-wayland',
+    mode: 'managed-desktop',
+    defaultDriverSetUri: 'system://driver-set/gpu-amd@open-foss',
+    defaultModaliases: ['pci:v00001002d0000744C', 'usb:v046DpC52B', 'display:webgpu'],
+    exclude: ['xorg-server', 'gnome-software', 'tracker-miner-fs', 'evolution-data-server', 'epiphany'],
+    remap: {
+      gdm: 'awesome-os/desktop#greeter',
+      'gnome-software': 'awesome-os/holo-pm',
+      epiphany: 'awesome-os/sectium-browser',
+    },
+  },
+  {
+    uri: 'system://profile/workstation-kde',
+    id: 'workstation-kde',
+    name: 'Workstation — KDE Plasma Wayland (Debloated)',
+    osRepo: 'awesome-os/desktop',
+    locality: 'local',
+    surface: 'desktop',
+    desktopAdapter: 'kde-plasma',
+    mode: 'managed-desktop',
+    defaultDriverSetUri: 'system://driver-set/gpu-amd@open-foss',
+    defaultModaliases: ['pci:v00008086d0000A7A0', 'usb:v046DpC52B', 'display:webgpu'],
+    exclude: ['xorg-server', 'baloo', 'discover', 'akonadi', 'drkonqi'],
+    remap: {
+      sddm: 'awesome-os/desktop#greeter',
+      discover: 'awesome-os/holo-pm',
+      display: 'holo-display-qt',
+    },
   },
   {
     uri: 'system://profile/kiosk-appliance',

@@ -213,13 +213,21 @@ describe('awesome-os/host-manager — ChromeOS/Fuchsia Fleet Control Plane', () 
   });
 
   it('enrolls hosts from system://profile/* presets and switches auditable system://driver-set/* tracks with A/B rollback', () => {
-    assert.ok(SYSTEM_PROFILES.length >= 6);
+    assert.ok(SYSTEM_PROFILES.length >= 8);
     assert.ok(AUDITABLE_DRIVER_SETS.length >= 6);
 
     let fleet = createDefaultSeedFleet();
     const enrolled = enrollFromProfile(fleet, 'dev-laptop-01', 'system://profile/workstation-omarchy');
     assert.equal(enrolled.profile.desktopAdapter, 'omarchy-hyprland');
     fleet = enrolled.fleet;
+
+    const gnome = enrollFromProfile(fleet, 'gnome-box-01', 'system://profile/workstation-gnome');
+    assert.equal(gnome.profile.desktopAdapter, 'gnome-wayland');
+    assert.ok(gnome.profile.exclude?.includes('tracker-miner-fs'));
+    const kde = enrollFromProfile(gnome.fleet, 'kde-box-01', 'system://profile/workstation-kde');
+    assert.equal(kde.profile.desktopAdapter, 'kde-plasma');
+    assert.ok(kde.profile.exclude?.includes('baloo'));
+    fleet = kde.fleet;
 
     const switchedProp = switchHostDriverSet(fleet, 'dev-laptop-01', 'system://driver-set/gpu-nvidia@proprietary');
     assert.equal(switchedProp.driverSet.track, 'proprietary');

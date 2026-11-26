@@ -50,6 +50,8 @@ export type DesktopAdapterId =
   | 'omarchy-hyprland'
   | 'noctalia-shell'
   | 'chonkstep-wayland'
+  | 'gnome-wayland'
+  | 'kde-plasma'
   | 'kitty-ink-tui';
 export type SlotId = 'A' | 'B';
 
